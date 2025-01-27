@@ -23,7 +23,6 @@ class MetricEvaluator:
             ValueError: Если данные в файлах не совместимы.
         """
         self.true_csv = self.read_file(true_file)
-        print(self.true_csv)
         self.pred_csv = self.read_file(prediction_file)
         self.validate_data()
 
