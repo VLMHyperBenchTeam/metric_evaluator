@@ -23,6 +23,7 @@ class MetricEvaluator:
             ValueError: Если данные в файлах не совместимы.
         """
         self.true_csv = self.read_file(true_file)
+        print(self.true_csv)
         self.pred_csv = self.read_file(prediction_file)
         self.validate_data()
 
@@ -38,10 +39,11 @@ class MetricEvaluator:
         Исключения:
             pd.errors.ParserError: Если файл не может быть прочитан как CSV или TSV.
         """
-        try:
-            return pd.read_csv(file_path, sep=",")  # Читаем как CSV
-        except pd.errors.ParserError:
-            return pd.read_csv(file_path, sep="\t")  # Если ошибка, читаем как TSV
+        return pd.read_csv(file_path, sep=";", encoding='utf-8-sig')
+        # try:
+        #     return pd.read_csv(file_path, sep=";", encoding='utf-8-sig')  # Читаем как CSV
+        # except pd.errors.ParserError:
+        #     return pd.read_csv(file_path, sep="\t", encoding='utf-8-sig')  # Если ошибка, читаем как TSV
 
     def validate_data(self) -> None:
         """Проверяет совместимость данных в true_csv и pred_csv.
@@ -49,9 +51,6 @@ class MetricEvaluator:
         Исключения:
             ValueError: Если столбцы или количество строк не совпадают.
         """
-        if self.true_csv.columns.tolist() != self.pred_csv.columns.tolist():
-            raise ValueError("Столбцы true_csv и pred_csv не совпадают.")
-
         if len(self.true_csv) != len(self.pred_csv):
             raise ValueError("Количество строк true_csv и pred_csv не совпадает.")
 
@@ -66,44 +65,36 @@ class MetricEvaluator:
             - CER (Character Error Rate)
             - BLEU (Bilingual Evaluation Understudy)
         """
-        # Создаем датафрейм для результатов
-        result_df = self.true_csv.drop(columns='answear_bbox')  # Удаляем избыточную информацию
+        merged_df = pd.merge(self.pred_csv, self.true_csv, left_on='id', right_on='id')
 
-        # Создаем хранилища для метрик
-        wer_error_list = []
-        cer_error_list = []
-        bleu_score_list = []
+        # Функция для вычисления метрик
+        def calculate_metrics(row):
+            try:
+                Y_true = ast.literal_eval(row['answer'])
+            except:
+                Y_true = row['answer']
 
-        for row in range(len(self.true_csv)):
-            # Преобразуем строку в список
-            Y_true = ast.literal_eval(self.true_csv['answers'][row])
-            y_pred = ast.literal_eval(self.pred_csv['answers'][row])
+            try:
+                y_pred = ast.literal_eval(row['answer'])
+            except:
+                y_pred = row['answer']
 
-            # Проверка на количество ответов
-            if len(Y_true) != len(y_pred):
-                pass  # Пока игнорируем случаи с разным количеством ответов
-
-            # Вычисляем метрику WER
+            # Вычисляем метрики
             wer_error = wer(Y_true, y_pred)
-            wer_error_list.append(wer_error)
-
-            # Вычисляем метрику CER
             cer_error = cer(Y_true, y_pred)
-            cer_error_list.append(cer_error)
-
-            # Вычисляем метрику BLEU
             bleu_score = sacrebleu.corpus_bleu(Y_true, [y_pred]).score
-            bleu_score_list.append(bleu_score)
 
-        # Дополняем результирующий датафрейм метриками
-        metrics = {
-            'pred_answers': self.pred_csv['answers'],
-            'wer_error': wer_error_list,
-            'cer_error': cer_error_list,
-            'bleu_score': bleu_score_list
-        }
-        metrics = pd.DataFrame(metrics)
-        result_df = pd.concat([result_df, metrics], axis=1)
+            return pd.Series({
+                'wer_error': wer_error,
+                'cer_error': cer_error,
+                'bleu_score': bleu_score
+            })
+
+        # Применяем функцию calculate_metrics к каждой строке
+        metrics_df = merged_df.apply(calculate_metrics, axis=1)
+
+        # Объединяем результаты с исходным DataFrame
+        result_df = pd.concat([merged_df, metrics_df], axis=1)
 
         return result_df
 
@@ -116,29 +107,31 @@ class MetricEvaluator:
         Возвращает:
             pd.DataFrame: DataFrame с метриками для каждого типа документа.
         """
-        # Создаем список из всех уникальных типов документов
-        doc_types = list(df['doc_class'].value_counts().index)
+        results = []
 
-        # Создаем хранилища для метрик
-        wer_error_list = []
-        cer_error_list = []
-        bleu_score_list = []
+        # Группируем данные по doc_class
+        grouped = df.groupby('doc_class')
 
-        # Фильтруем и аппендим хранилища
-        for doc_type in doc_types:
-            wer_error_list.append(df[df['doc_class'] == doc_type]['wer_error'].mean())
-            cer_error_list.append(df[df['doc_class'] == doc_type]['cer_error'].mean())
-            bleu_score_list.append(df[df['doc_class'] == doc_type]['bleu_score'].mean())
+        for doc_class, group in grouped:
+            true_answers = group['answer'].tolist()
+            pred_answers = group['pred_answers'].tolist()
 
-        # Создаем DataFrame с метриками для каждого типа документа
-        doc_type_metrics = {
-            'doc_class': doc_types,
-            'wer_error': wer_error_list,
-            'cer_error': cer_error_list,
-            'bleu_score': bleu_score_list
-        }
+            # Вычисляем метрики
+            wer_error = wer(true_answers, pred_answers)
+            cer_error = cer(true_answers, pred_answers)
+            bleu_error = sacrebleu.corpus_bleu(true_answers, [pred_answers]).score
 
-        return pd.DataFrame(doc_type_metrics)
+            # Добавляем результат в список
+            results.append({
+                'doc_class': doc_class,
+                'wer_error': wer_error,
+                'cer_error': cer_error,
+                'bleu_error': bleu_error
+            })
+
+        # Создаем DataFrame из списка результатов
+        result_df = pd.DataFrame(results)
+        return result_df
 
     def group_by_doc_question(self, df: pd.DataFrame) -> pd.DataFrame:
         """Группирует данные по типу документа и типу вопроса.
@@ -149,28 +142,70 @@ class MetricEvaluator:
         Возвращает:
             pd.DataFrame: Сгруппированный DataFrame с метриками.
         """
-        grouped = df.groupby(['doc_class', 'question_type'])['wer_error', 'cer_error', 'bleu_score'].mean().reset_index()
-        return grouped
+        # Список для хранения результатов
+        results = []
 
-    def calculate_metrics_general(self) -> dict:
+        # Группируем данные по doc_class и question_type
+        grouped = df.groupby(['doc_class', 'question_type'])
+
+        for (doc_class, question_type), group in grouped:
+            true_answers = group['answer'].tolist()
+            pred_answers = group['pred_answers'].tolist()
+
+            # Вычисляем метрики
+            wer_error = wer(true_answers, pred_answers)
+            cer_error = cer(true_answers, pred_answers)
+            bleu_error = sacrebleu.corpus_bleu(true_answers, [pred_answers]).score
+
+            # Добавляем результат в список
+            results.append({
+                'doc_class': doc_class,
+                'question_type': question_type,
+                'wer_error': wer_error,
+                'cer_error': cer_error,
+                'bleu_error': bleu_error
+            })
+
+        # Создаем DataFrame из списка результатов
+        result_df = pd.DataFrame(results)
+        return result_df
+
+    def calculate_metrics_general(self) -> pd.DataFrame:
         """Вычисляет общие метрики по всему корпусу данных.
 
         Возвращает:
             dict: Словарь с метриками WER, CER и BLEU.
         """
-        true_answers = []
-        pred_answers = []
-
-        for row in range(len(self.true_csv)):
-            true_answers.extend(ast.literal_eval(self.true_csv['answers'][row]))
-            pred_answers.extend(ast.literal_eval(self.pred_csv['answers'][row]))
+        def safe_literal_eval(value):
+            try:
+                return ast.literal_eval(value)
+            except:
+                return value
+            
+        true_answers = self.true_csv['answer'].map(safe_literal_eval).explode().tolist()
+        pred_answers = self.pred_csv['answer'].map(safe_literal_eval).explode().tolist()
 
         wer_error = wer(true_answers, pred_answers)
         cer_error = cer(true_answers, pred_answers)
         bleu_score = sacrebleu.corpus_bleu(true_answers, [pred_answers]).score
 
-        return {
+        result = {
             'wer_error': wer_error,
             'cer_error': cer_error,
             'bleu_score': bleu_score
         }
+
+        return pd.DataFrame(result)
+    
+    def save_function_results(self, csv_path, func_name, func_arg=None, encoding="utf-8-sig", index=False): 
+        """
+        Описание ...
+        """
+        result = func_name(func_arg) if func_arg else func_name()
+        result.to_csv(
+            csv_path=csv_path,
+            sep=";",
+            encoding=encoding,
+            index=index,
+        )
+        print(f"Результат метода {func_name.__name__} сохранен в папку {csv_path}")
