@@ -75,9 +75,9 @@ class MetricEvaluator:
                 Y_true = row["answer"]
 
             try:
-                y_pred = ast.literal_eval(row["answer"])
+                y_pred = ast.literal_eval(row["model_answer"])
             except:
-                y_pred = row["answer"]
+                y_pred = row["model_answer"]
 
             # Вычисляем метрики
             wer_error = wer(Y_true, y_pred)
@@ -137,7 +137,7 @@ class MetricEvaluator:
         result_df = pd.DataFrame(results)
         return result_df
 
-    def group_by_doc_question(self, df: pd.DataFrame) -> pd.DataFrame:
+    def calculate_metrics_by_doc_question(self, df: pd.DataFrame) -> pd.DataFrame:
         """Группирует данные по типу документа и типу вопроса.
 
         Аргументы:
@@ -211,12 +211,26 @@ class MetricEvaluator:
     ):
         """
         Описание ...
+        
+        func_name "by_id", "by_doc_type", "by_doc_question", "general"
         """
-        result = func_name(func_arg) if func_arg else func_name()
+        func_map = {"by_id": self.calculate_metrics_by_id,
+                    "by_doc_type":self.calculate_metrics_by_doc_type,
+                    "by_doc_question":self.calculate_metrics_by_doc_question,
+                    "general":self.calculate_metrics_general
+            
+        }
+        
+        metric_func = func_map[func_name]
+        
+        
+        result = metric_func(func_arg) if func_arg else metric_func()
         result.to_csv(
-            csv_path=csv_path,
+            csv_path,
             sep=";",
             encoding=encoding,
             index=index,
         )
-        print(f"Результат метода {func_name.__name__} сохранен в папку {csv_path}")
+        print(f"Результат метода {metric_func.__name__} сохранен в папку {csv_path}")
+        
+        return result
