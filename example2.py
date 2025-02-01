@@ -24,7 +24,9 @@ if __name__ == "__main__":
 
     df_by_doc_question_path_csv = "workspace/ModelsMetrics/df_by_doc_question.csv"
     metric_eval.save_function_results(
-        csv_path=df_by_doc_type_path_csv, func_name="by_doc_question", func_arg=df_by_id
+        csv_path=df_by_doc_question_path_csv,
+        func_name="by_doc_question",
+        func_arg=df_by_id,
     )
 
     df_general_csv_path = "workspace/ModelsMetrics/df_general.csv"
