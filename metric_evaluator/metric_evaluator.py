@@ -154,7 +154,7 @@ class MetricEvaluator:
 
         for (doc_class, question_type), group in grouped:
             true_answers = group["answer"].tolist()
-            pred_answers = group["pred_answers"].tolist()
+            pred_answers = group["model_answer"].tolist()
 
             # Вычисляем метрики
             wer_error = wer(true_answers, pred_answers)
@@ -224,7 +224,7 @@ class MetricEvaluator:
         metric_func = func_map[func_name]
         
         
-        result = metric_func(func_arg) if func_arg else metric_func()
+        result = metric_func(func_arg) if func_arg is not None else metric_func()
         result.to_csv(
             csv_path,
             sep=";",
