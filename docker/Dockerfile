@@ -5,6 +5,7 @@ WORKDIR /workspace
 # Установка системных зависимостей для компиляции пакетов
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    git \
     && rm -rf /var/lib/apt/lists/*
 
 # Установка Poetry версии 1.8.3
