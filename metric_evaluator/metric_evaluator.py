@@ -25,6 +25,11 @@ class MetricEvaluator:
         self.true_csv = self.read_file(true_file)
         self.true_csv["id"] = self.true_csv.index
         self.pred_csv = self.read_file(prediction_file)
+        
+        # Фильтрация каждого DataFrame
+        self.true_csv = self.true_csv[self.true_csv['id'].isin(self.pred_csv['id'])]
+        self.pred_csv = self.pred_csv[self.pred_csv['id'].isin(self.true_csv['id'])]
+        
         self.validate_data()
 
     def read_file(self, file_path: str) -> pd.DataFrame:
@@ -65,7 +70,7 @@ class MetricEvaluator:
             - CER (Character Error Rate)
             - BLEU (Bilingual Evaluation Understudy)
         """
-        merged_df = pd.merge(self.pred_csv, self.true_csv, left_on="id", right_on="id")
+        merged_df = pd.merge(self.pred_csv, self.true_csv, on="id", how="inner",)
 
         # Функция для вычисления метрик
         def calculate_metrics(row):
