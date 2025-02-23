@@ -25,11 +25,16 @@ class MetricEvaluator:
         self.true_csv = self.read_file(true_file)
         self.true_csv["id"] = self.true_csv.index
         self.pred_csv = self.read_file(prediction_file)
-        
+
         # Фильтрация каждого DataFrame
-        self.true_csv = self.true_csv[self.true_csv['id'].isin(self.pred_csv['id'])]
-        self.pred_csv = self.pred_csv[self.pred_csv['id'].isin(self.true_csv['id'])]
-        
+        self.true_csv = self.true_csv[self.true_csv["id"].isin(self.pred_csv["id"])]
+        self.pred_csv = self.pred_csv[self.pred_csv["id"].isin(self.true_csv["id"])]
+
+        # Преобразуем значения в столбцах "answer" в датасете и "model_answer"
+        # в ответах модели в строку.
+        self.true_csv["answer"] = self.true_csv["answer"].astype(str)
+        self.pred_csv["model_answer"] = self.pred_csv["model_answer"].astype(str)
+
         self.validate_data()
 
     def read_file(self, file_path: str) -> pd.DataFrame:
@@ -70,7 +75,12 @@ class MetricEvaluator:
             - CER (Character Error Rate)
             - BLEU (Bilingual Evaluation Understudy)
         """
-        merged_df = pd.merge(self.pred_csv, self.true_csv, on="id", how="inner",)
+        merged_df = pd.merge(
+            self.pred_csv,
+            self.true_csv,
+            on="id",
+            how="inner",
+        )
 
         # Функция для вычисления метрик
         def calculate_metrics(row):
@@ -216,19 +226,18 @@ class MetricEvaluator:
     ):
         """
         Описание ...
-        
+
         func_name "by_id", "by_doc_type", "by_doc_question", "general"
         """
-        func_map = {"by_id": self.calculate_metrics_by_id,
-                    "by_doc_type":self.calculate_metrics_by_doc_type,
-                    "by_doc_question":self.calculate_metrics_by_doc_question,
-                    "general":self.calculate_metrics_general
-            
+        func_map = {
+            "by_id": self.calculate_metrics_by_id,
+            "by_doc_type": self.calculate_metrics_by_doc_type,
+            "by_doc_question": self.calculate_metrics_by_doc_question,
+            "general": self.calculate_metrics_general,
         }
-        
+
         metric_func = func_map[func_name]
-        
-        
+
         result = metric_func(func_arg) if func_arg is not None else metric_func()
         result.to_csv(
             csv_path,
@@ -237,5 +246,5 @@ class MetricEvaluator:
             index=index,
         )
         print(f"Результат метода {metric_func.__name__} сохранен в папку {csv_path}")
-        
+
         return result
