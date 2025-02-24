@@ -71,15 +71,8 @@ class MetricEvaluator:
         )
 
         def calculate_metrics(row):
-            try:
-                Y_true = ast.literal_eval(row["answer"])
-            except:
-                Y_true = row["answer"]
-
-            try:
-                y_pred = ast.literal_eval(row["model_answer"])
-            except:
-                y_pred = row["model_answer"]
+            Y_true = row["answer"]
+            y_pred = row["model_answer"]
 
             metrics_dict = {}
             if "WER" in metrics:
