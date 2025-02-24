@@ -14,12 +14,15 @@ if __name__ == "__main__":
 
     df_by_id_path_csv = "workspace/ModelsMetrics/by_id.csv"
     df_by_id = metric_eval.save_function_results(
-        csv_path=df_by_id_path_csv, func_name="by_id"
+        csv_path=df_by_id_path_csv, func_name="by_id", metrics=["CER"]
     )
 
     df_by_doc_type_path_csv = "workspace/ModelsMetrics/df_by_doc_type.csv"
     metric_eval.save_function_results(
-        csv_path=df_by_doc_type_path_csv, func_name="by_doc_type", func_arg=df_by_id
+        csv_path=df_by_doc_type_path_csv,
+        func_name="by_doc_type",
+        func_arg=df_by_id,
+        metrics=["CER"],
     )
 
     df_by_doc_question_path_csv = "workspace/ModelsMetrics/df_by_doc_question.csv"
@@ -27,9 +30,10 @@ if __name__ == "__main__":
         csv_path=df_by_doc_question_path_csv,
         func_name="by_doc_question",
         func_arg=df_by_id,
+        metrics=["CER"],
     )
 
     df_general_csv_path = "workspace/ModelsMetrics/df_general.csv"
     df_general = metric_eval.save_function_results(
-        csv_path=df_general_csv_path, func_name="general"
+        csv_path=df_general_csv_path, func_name="general", metrics=["CER"]
     )

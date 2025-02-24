@@ -30,8 +30,7 @@ class MetricEvaluator:
         self.true_csv = self.true_csv[self.true_csv["id"].isin(self.pred_csv["id"])]
         self.pred_csv = self.pred_csv[self.pred_csv["id"].isin(self.true_csv["id"])]
 
-        # Преобразуем значения в столбцах "answer" в датасете и "model_answer"
-        # в ответах модели в строку.
+        # Преобразуем значения в строки
         self.true_csv["answer"] = self.true_csv["answer"].astype(str)
         self.pred_csv["model_answer"] = self.pred_csv["model_answer"].astype(str)
 
@@ -45,36 +44,25 @@ class MetricEvaluator:
 
         Возвращает:
             pd.DataFrame: DataFrame с данными из файла.
-
-        Исключения:
-            pd.errors.ParserError: Если файл не может быть прочитан как CSV или TSV.
         """
         return pd.read_csv(file_path, sep=";", encoding="utf-8-sig")
-        # try:
-        #     return pd.read_csv(file_path, sep=";", encoding='utf-8-sig')  # Читаем как CSV
-        # except pd.errors.ParserError:
-        #     return pd.read_csv(file_path, sep="\t", encoding='utf-8-sig')  # Если ошибка, читаем как TSV
 
     def validate_data(self) -> None:
-        """Проверяет совместимость данных в true_csv и pred_csv.
-
-        Исключения:
-            ValueError: Если количество строк не совпадают.
-        """
+        """Проверяет совместимость данных в true_csv и pred_csv."""
         if len(self.true_csv) != len(self.pred_csv):
             raise ValueError("Количество строк true_csv и pred_csv не совпадает.")
 
-    def calculate_metrics_by_id(self) -> pd.DataFrame:
+    def calculate_metrics_by_id(self, metrics: list = None) -> pd.DataFrame:
         """Вычисляет метрики для каждого ID.
+
+        Аргументы:
+            metrics (list): Список метрик для расчета (поддерживаются "WER", "CER", "BLEU").
 
         Возвращает:
             pd.DataFrame: DataFrame с метриками для каждого ID.
-
-        Метрики:
-            - WER (Word Error Rate)
-            - CER (Character Error Rate)
-            - BLEU (Bilingual Evaluation Understudy)
         """
+        metrics = [m.upper() for m in metrics] if metrics else ["WER", "CER", "BLEU"]
+        
         merged_df = pd.merge(
             self.pred_csv,
             self.true_csv,
@@ -82,7 +70,6 @@ class MetricEvaluator:
             how="inner",
         )
 
-        # Функция для вычисления метрик
         def calculate_metrics(row):
             try:
                 Y_true = ast.literal_eval(row["answer"])
@@ -94,140 +81,126 @@ class MetricEvaluator:
             except:
                 y_pred = row["model_answer"]
 
-            # Вычисляем метрики
-            wer_error = wer(Y_true, y_pred)
-            cer_error = cer(Y_true, y_pred)
-            bleu_score = sacrebleu.corpus_bleu(Y_true, [y_pred]).score
+            metrics_dict = {}
+            if "WER" in metrics:
+                metrics_dict["wer_error"] = wer(Y_true, y_pred)
+            if "CER" in metrics:
+                metrics_dict["cer_error"] = cer(Y_true, y_pred)
+            if "BLEU" in metrics:
+                metrics_dict["bleu_score"] = sacrebleu.corpus_bleu([Y_true], [[y_pred]]).score
 
-            return pd.Series(
-                {
-                    "wer_error": wer_error,
-                    "cer_error": cer_error,
-                    "bleu_score": bleu_score,
-                }
-            )
+            return pd.Series(metrics_dict)
 
-        # Применяем функцию calculate_metrics к каждой строке
         metrics_df = merged_df.apply(calculate_metrics, axis=1)
-
-        # Объединяем результаты с исходным DataFrame
         result_df = pd.concat([merged_df, metrics_df], axis=1)
-
         return result_df
 
-    def calculate_metrics_by_doc_type(self, df: pd.DataFrame) -> pd.DataFrame:
+    def calculate_metrics_by_doc_type(self, df: pd.DataFrame, metrics: list = None) -> pd.DataFrame:
         """Вычисляет метрики для каждого типа документа.
 
         Аргументы:
             df (pd.DataFrame): DataFrame из метода calculate_metrics_by_id.
+            metrics (list): Список метрик для расчета.
 
         Возвращает:
             pd.DataFrame: DataFrame с метриками для каждого типа документа.
         """
+        metrics = [m.upper() for m in metrics] if metrics else ["WER", "CER", "BLEU"]
         results = []
-
-        # Группируем данные по doc_class
         grouped = df.groupby("doc_class")
 
         for doc_class, group in grouped:
             true_answers = group["answer"].tolist()
             pred_answers = group["model_answer"].tolist()
 
-            # Вычисляем метрики
-            wer_error = wer(true_answers, pred_answers)
-            cer_error = cer(true_answers, pred_answers)
-            bleu_error = sacrebleu.corpus_bleu(true_answers, [pred_answers]).score
+            metrics_dict = {"doc_class": doc_class}
+            if "WER" in metrics:
+                metrics_dict["wer_error"] = wer(true_answers, pred_answers)
+            if "CER" in metrics:
+                metrics_dict["cer_error"] = cer(true_answers, pred_answers)
+            if "BLEU" in metrics:
+                metrics_dict["bleu_error"] = sacrebleu.corpus_bleu(true_answers, [pred_answers]).score
 
-            # Добавляем результат в список
-            results.append(
-                {
-                    "doc_class": doc_class,
-                    "wer_error": wer_error,
-                    "cer_error": cer_error,
-                    "bleu_error": bleu_error,
-                }
-            )
+            results.append(metrics_dict)
 
-        # Создаем DataFrame из списка результатов
-        result_df = pd.DataFrame(results)
-        return result_df
+        return pd.DataFrame(results)
 
-    def calculate_metrics_by_doc_question(self, df: pd.DataFrame) -> pd.DataFrame:
-        """Группирует данные по типу документа и типу вопроса.
+    def calculate_metrics_by_doc_question(self, df: pd.DataFrame, metrics: list = None) -> pd.DataFrame:
+        """Группирует данные по типу документа и вопроса.
 
         Аргументы:
             df (pd.DataFrame): Исходный DataFrame.
+            metrics (list): Список метрик для расчета.
 
         Возвращает:
             pd.DataFrame: Сгруппированный DataFrame с метриками.
         """
-        # Список для хранения результатов
+        metrics = [m.upper() for m in metrics] if metrics else ["WER", "CER", "BLEU"]
         results = []
-
-        # Группируем данные по doc_class и question_type
         grouped = df.groupby(["doc_class", "question_type"])
 
         for (doc_class, question_type), group in grouped:
             true_answers = group["answer"].tolist()
             pred_answers = group["model_answer"].tolist()
 
-            # Вычисляем метрики
-            wer_error = wer(true_answers, pred_answers)
-            cer_error = cer(true_answers, pred_answers)
-            bleu_error = sacrebleu.corpus_bleu(true_answers, [pred_answers]).score
+            metrics_dict = {
+                "doc_class": doc_class,
+                "question_type": question_type,
+            }
+            if "WER" in metrics:
+                metrics_dict["wer_error"] = wer(true_answers, pred_answers)
+            if "CER" in metrics:
+                metrics_dict["cer_error"] = cer(true_answers, pred_answers)
+            if "BLEU" in metrics:
+                metrics_dict["bleu_error"] = sacrebleu.corpus_bleu(true_answers, [pred_answers]).score
 
-            # Добавляем результат в список
-            results.append(
-                {
-                    "doc_class": doc_class,
-                    "question_type": question_type,
-                    "wer_error": wer_error,
-                    "cer_error": cer_error,
-                    "bleu_error": bleu_error,
-                }
-            )
+            results.append(metrics_dict)
 
-        # Создаем DataFrame из списка результатов
-        result_df = pd.DataFrame(results)
-        return result_df
+        return pd.DataFrame(results)
 
-    def calculate_metrics_general(self) -> pd.DataFrame:
+    def calculate_metrics_general(self, metrics: list = None) -> pd.DataFrame:
         """Вычисляет общие метрики по всему корпусу данных.
 
+        Аргументы:
+            metrics (list): Список метрик для расчета.
+
         Возвращает:
-            dict: Словарь с метриками WER, CER и BLEU.
+            pd.DataFrame: DataFrame с общими метриками.
         """
+        metrics = [m.upper() for m in metrics] if metrics else ["WER", "CER", "BLEU"]
+        
+        true_answers = self.true_csv["answer"].tolist()
+        pred_answers = self.pred_csv["model_answer"].tolist()
 
-        def safe_literal_eval(value):
-            try:
-                return ast.literal_eval(value)
-            except:
-                return value
-
-        true_answers = self.true_csv["answer"].map(safe_literal_eval).explode().tolist()
-        pred_answers = (
-            self.pred_csv["model_answer"].map(safe_literal_eval).explode().tolist()
-        )
-
-        wer_error = wer(true_answers, pred_answers)
-        cer_error = cer(true_answers, pred_answers)
-        bleu_score = sacrebleu.corpus_bleu(true_answers, [pred_answers]).score
-
-        result = {
-            "wer_error": [wer_error],
-            "cer_error": [cer_error],
-            "bleu_score": [bleu_score],
-        }
+        result = {}
+        if "WER" in metrics:
+            result["wer_error"] = [wer(true_answers, pred_answers)]
+        if "CER" in metrics:
+            result["cer_error"] = [cer(true_answers, pred_answers)]
+        if "BLEU" in metrics:
+            result["bleu_score"] = [sacrebleu.corpus_bleu(true_answers, [pred_answers]).score]
 
         return pd.DataFrame(result)
 
     def save_function_results(
-        self, csv_path, func_name, func_arg=None, encoding="utf-8-sig", index=False
+        self, 
+        csv_path, 
+        func_name, 
+        func_arg=None, 
+        metrics: list = None,
+        encoding="utf-8-sig", 
+        index=False
     ):
         """
-        Описание ...
+        Сохраняет результаты работы методов класса в CSV-файл.
 
-        func_name "by_id", "by_doc_type", "by_doc_question", "general"
+        Аргументы:
+            csv_path (str): Путь для сохранения файла
+            func_name (str): Имя метода ("by_id", "by_doc_type", "by_doc_question", "general")
+            func_arg: Аргумент для методов, требующих входные данные
+            metrics (list): Список метрик для расчета
+            encoding (str): Кодировка файла
+            index (bool): Сохранять индекс DataFrame
         """
         func_map = {
             "by_id": self.calculate_metrics_by_id,
@@ -238,13 +211,11 @@ class MetricEvaluator:
 
         metric_func = func_map[func_name]
 
-        result = metric_func(func_arg) if func_arg is not None else metric_func()
-        result.to_csv(
-            csv_path,
-            sep=";",
-            encoding=encoding,
-            index=index,
-        )
-        print(f"Результат метода {metric_func.__name__} сохранен в папку {csv_path}")
+        if func_arg is not None:
+            result = metric_func(func_arg, metrics=metrics)
+        else:
+            result = metric_func(metrics=metrics)
 
+        result.to_csv(csv_path, sep=";", encoding=encoding, index=index)
+        print(f"Результат метода {metric_func.__name__} сохранен в {csv_path}")
         return result
