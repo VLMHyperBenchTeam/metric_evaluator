@@ -9,29 +9,19 @@ if __name__ == "__main__":
     model_answers = (
         "data/snils_MODELFRAMEWORK_Qwen2-VL-2B-Instruct_VQA_answers_20250124_125639.csv"
     )
+    metrics_aggregators = [
+        "by_id",
+        "by_doc_question",
+        "by_doc_type",
+        "general",
+    ]
+    metrics=["CER"]
 
     metric_eval = MetricEvaluator(dataset_annot, model_answers)
-
-    df_by_id_path_csv = "workspace/ModelsMetrics/df_by_id.csv"
-    df_by_id = metric_eval.save_function_results(
-        csv_path=df_by_id_path_csv, func_name="by_id", metrics=["CER"]
-    )
-
-    df_by_doc_type_path_csv = "workspace/ModelsMetrics/df_by_doc_type.csv"
-    metric_eval.save_function_results(
-        csv_path=df_by_doc_type_path_csv,
-        func_name="by_doc_type",
-        metrics=["CER"],
-    )
-
-    df_by_doc_question_path_csv = "workspace/ModelsMetrics/df_by_doc_question.csv"
-    metric_eval.save_function_results(
-        csv_path=df_by_doc_question_path_csv,
-        func_name="by_doc_question",
-        metrics=["CER"],
-    )
-
-    df_general_csv_path = "workspace/ModelsMetrics/df_general.csv"
-    df_general = metric_eval.save_function_results(
-        csv_path=df_general_csv_path, func_name="general", metrics=["CER"]
+    
+    # Производим расчет метрик по всем агрегаторам
+    for metrics_aggregator in metrics_aggregators:
+        metric_csv_path = f"workspace/ModelsMetrics/df_{metrics_aggregator}.csv"
+        metric_eval.save_function_results(
+        csv_path=metric_csv_path, func_name=metrics_aggregator, metrics=metrics
     )
