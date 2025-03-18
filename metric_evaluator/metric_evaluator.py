@@ -25,6 +25,7 @@ class MetricEvaluator:
         self.true_csv = self.read_file(true_file)
         self.true_csv["id"] = self.true_csv.index
         self.pred_csv = self.read_file(prediction_file)
+        self.by_id_cache = None
 
         # Фильтрация каждого DataFrame
         self.true_csv = self.true_csv[self.true_csv["id"].isin(self.pred_csv["id"])]
@@ -35,6 +36,11 @@ class MetricEvaluator:
         self.pred_csv["model_answer"] = self.pred_csv["model_answer"].astype(str)
 
         self.validate_data()
+        
+    def clear_by_id_cache(self):
+        """Очистить кэш для вычисленного by_id агрегатора.
+        """
+        self.by_id_cache = None
 
     def read_file(self, file_path: str) -> pd.DataFrame:
         """Читает файл с определением разделителя (CSV или TSV).
@@ -88,19 +94,21 @@ class MetricEvaluator:
         result_df = pd.concat([merged_df, metrics_df], axis=1)
         return result_df
 
-    def calculate_metrics_by_doc_type(self, df: pd.DataFrame, metrics: list = None) -> pd.DataFrame:
+    def calculate_metrics_by_doc_type(self, metrics: list = None) -> pd.DataFrame:
         """Вычисляет метрики для каждого типа документа.
 
         Аргументы:
-            df (pd.DataFrame): DataFrame из метода calculate_metrics_by_id.
             metrics (list): Список метрик для расчета.
 
         Возвращает:
             pd.DataFrame: DataFrame с метриками для каждого типа документа.
         """
+        if self.by_id_cache is None:
+            self.by_id_cache = self.calculate_metrics_by_id()
+        
         metrics = [m.upper() for m in metrics] if metrics else ["WER", "CER", "BLEU"]
         results = []
-        grouped = df.groupby("doc_class")
+        grouped = self.by_id_cache.groupby("doc_class")
 
         for doc_class, group in grouped:
             true_answers = group["answer"].tolist()
@@ -118,19 +126,21 @@ class MetricEvaluator:
 
         return pd.DataFrame(results)
 
-    def calculate_metrics_by_doc_question(self, df: pd.DataFrame, metrics: list = None) -> pd.DataFrame:
+    def calculate_metrics_by_doc_question(self, metrics: list = None) -> pd.DataFrame:
         """Группирует данные по типу документа и вопроса.
 
         Аргументы:
-            df (pd.DataFrame): Исходный DataFrame.
             metrics (list): Список метрик для расчета.
 
         Возвращает:
             pd.DataFrame: Сгруппированный DataFrame с метриками.
         """
+        if self.by_id_cache is None:
+            self.by_id_cache = self.calculate_metrics_by_id()
+        
         metrics = [m.upper() for m in metrics] if metrics else ["WER", "CER", "BLEU"]
         results = []
-        grouped = df.groupby(["doc_class", "question_type"])
+        grouped = self.by_id_cache.groupby(["doc_class", "question_type"])
 
         for (doc_class, question_type), group in grouped:
             true_answers = group["answer"].tolist()
