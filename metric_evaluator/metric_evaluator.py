@@ -26,6 +26,9 @@ class MetricEvaluator:
         self.true_csv["id"] = self.true_csv.index
         self.pred_csv = self.read_file(prediction_file)
         self.by_id_cache = None
+        
+        # поддерживаемые метрики и агрегаторы
+        self.supported_metrics = {"WER", "CER", "BLEU"}
 
         # Фильтрация каждого DataFrame
         self.true_csv = self.true_csv[self.true_csv["id"].isin(self.pred_csv["id"])]
@@ -188,8 +191,7 @@ class MetricEvaluator:
     def save_function_results(
         self, 
         csv_path, 
-        func_name, 
-        func_arg=None, 
+        func_name,
         metrics: list = None,
         encoding="utf-8-sig", 
         index=False
@@ -200,7 +202,6 @@ class MetricEvaluator:
         Аргументы:
             csv_path (str): Путь для сохранения файла
             func_name (str): Имя метода ("by_id", "by_doc_type", "by_doc_question", "general")
-            func_arg: Аргумент для методов, требующих входные данные
             metrics (list): Список метрик для расчета
             encoding (str): Кодировка файла
             index (bool): Сохранять индекс DataFrame
@@ -212,13 +213,14 @@ class MetricEvaluator:
             "general": self.calculate_metrics_general,
         }
 
-        metric_func = func_map[func_name]
-
-        if func_arg is not None:
-            result = metric_func(func_arg, metrics=metrics)
-        else:
+        if func_name in func_map:
+            metric_func = func_map[func_name]
             result = metric_func(metrics=metrics)
+            result.to_csv(csv_path, sep=";", encoding=encoding, index=index)
+            print(f"Результат метода {metric_func.__name__} сохранен в {csv_path}")
+            return result
+        else:
+            print(f"Указный вами метод агрегации {func_name} не поддерживается")
+            supported_aggregators = ", ".join(tuple(func_map.keys()))
+            print(f"Поддерживаются методы: {supported_aggregators}")
 
-        result.to_csv(csv_path, sep=";", encoding=encoding, index=index)
-        print(f"Результат метода {metric_func.__name__} сохранен в {csv_path}")
-        return result

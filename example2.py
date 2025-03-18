@@ -14,6 +14,7 @@ if __name__ == "__main__":
         "by_doc_question",
         "by_doc_type",
         "general",
+        "overall",
     ]
     metrics=["CER"]
 
